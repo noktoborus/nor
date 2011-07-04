@@ -1,6 +1,7 @@
 /* vim: ft=c ff=unix fenc=utf-8
  * file: main.c
  */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
