@@ -173,19 +173,21 @@ createXWindow (EGLNativeWindowType *xwin_trg, EGLNativeDisplayType *xdpy,
 				&xattr
 				/* attributes */
 				);
-#if 0
 		/* set title */
 		{
 			XSizeHints shints;
+			XClassHint chint;
+			chint.res_name = "kz";
+			chint.res_class = "Window";
 			memset (&shints, 0, sizeof (XSizeHints));
 			shints.width = wx;
 			shints.height = wy;
 			shints.flags = USSize | USPosition;
-			XSetNormalHints (xdpy, *xwin_trg, &shints);
-			XSetStandardProperties (xdpy, *xwin_trg, "", "", None, NULL,
+			XSetNormalHints (*xdpy, *xwin_trg, &shints);
+			XSetStandardProperties (*xdpy, *xwin_trg, "2:3", NULL, None, NULL,
 					0, &shints);
+			XSetClassHint (*xdpy, *xwin_trg, &chint);
 		}
-#endif
 		/* display window */
 		XMapWindow (*xdpy, *xwin_trg);
 		XRaiseWindow (*xdpy, *xwin_trg);
