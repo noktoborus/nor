@@ -19,8 +19,8 @@
 		CALL (__VA_ARGS__);\
 		if (EXPR)\
 		{\
-			fprintf (stderr, "FAIL CALL: [" __FILE__ ":%u] %s\n", \
-					__LINE__, #CALL " (" #__VA_ARGS__ ")");\
+			fprintf (stderr, "FAIL CALL: [" __FILE__ ":%u] %s <- %s\n", \
+					__LINE__, #CALL " (" #__VA_ARGS__ ")", __func__);\
 		}\
 	}
 
@@ -29,8 +29,8 @@
 		LVAL = CALL (__VA_ARGS__);\
 		if (EXPR)\
 		{\
-			fprintf (stderr, "FAIL CALL: [" __FILE__ ":%u] %s\n", \
-					__LINE__, #CALL " (" #__VA_ARGS__ ")");\
+			fprintf (stderr, "FAIL CALL: [" __FILE__ ":%u] %s <- %s\n", \
+					__LINE__, #CALL " (" #__VA_ARGS__ ")", __func__);\
 		}\
 	}
 
@@ -238,7 +238,7 @@ initSurfy (EGLSurface *esurf, EGLDisplay *edpy, EGLConfig *ecfg,
 		{
 			/* create surface */
 			eglGetConfigAttrib (*edpy, *ecfg, EGL_NATIVE_VISUAL_ID, &cc);
-			ec_ifcallv (createXWindow, xwin, xwin, xdpy, (VisualID*)&cc,
+			ec_ifcallv (createXWindow, *xwin, xwin, xdpy, (VisualID*)&cc,
 					wx, wy)
 			{
 				ec_ifcall (*esurf, eglCreateWindowSurface,
