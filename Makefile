@@ -16,3 +16,5 @@ clean:
 ${BIN}: ${SRC}
 	${CC} -o ${BIN} ${CFLAGS} ${SRC} ${LIBS}
 
+printeglconfig: printeglconfig.c
+	${CC} -o $@ ${CFLAGS} ${LIBS} $<
