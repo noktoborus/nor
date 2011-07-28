@@ -19,7 +19,7 @@
 
 #define ec_ec(CALL, EXPR) \
 	{\
-		if (!(EXPR))\
+		if (EXPR)\
 		{\
 			ec___ (CALL, EXPR);\
 		}\
@@ -520,7 +520,7 @@ main (int argc, char *argv[])
 		print_EGLInfo (&edpy);
 		/* match config */
 		eglChooseConfig (edpy, eattribs, &ecfg, 1, &cc);
-		ec_ec (eglChooseConfig, cc == 0);
+		ec_ec (eglChooseConfig, !cc);
 		/* create surface and context */
 		ec_if (initSurfy, initSurfy (&esurf, &edpy, &ecfg, &ectx, ectx_attr,
 				&xwin, &xdpy, surf.shape.wx, surf.shape.wy))
