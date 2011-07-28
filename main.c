@@ -14,41 +14,23 @@
 #include <X11/Xlib.h>
 
 /* error check */
-#define ec_callv(CALL, EXPR, ...) \
+#define ec___(CALL, EXPR) \
+	fprintf (stderr, "FAIL CALL: [" __FILE__ ":%u] %s `%s' <- %s\n", __LINE__, #CALL, #EXPR, __func__)
+
+#define ec_ec(CALL, EXPR) \
 	{\
-		CALL (__VA_ARGS__);\
-		if (EXPR)\
+		if (!(EXPR))\
 		{\
-			fprintf (stderr, "FAIL CALL: [" __FILE__ ":%u] %s <- %s\n", \
-					__LINE__, #CALL " (" #__VA_ARGS__ ")", __func__);\
+			ec___ (CALL, EXPR);\
 		}\
 	}
 
-#define ec_call(LVAL, CALL, EXPR, ...) \
+#define ec_if(CALL, EXPR) \
+	if (!(EXPR))\
 	{\
-		LVAL = CALL (__VA_ARGS__);\
-		if (EXPR)\
-		{\
-			fprintf (stderr, "FAIL CALL: [" __FILE__ ":%u] %s <- %s\n", \
-					__LINE__, #CALL " (" #__VA_ARGS__ ")", __func__);\
-		}\
-	}
-
-#define ec_ifcallv(CALL, EXPR, ...) \
-	ec_callv (CALL, !(EXPR), __VA_ARGS__)\
-	if (EXPR)
-
-#define ec_ifncallv(CALL, EXPR, ...) \
-	ec_callv (CALL, EXPR, __VA_ARGS__)\
-	if (!(EXPR))
-
-#define ec_ifcall(LVAL, CALL, EXPR, ...) \
-	ec_call (LVAL, CALL, !(EXPR), __VA_ARGS__)\
-	if (EXPR)
-
-#define ec_ifncall(LVAL, CALL, EXPR, ...) \
-	ec_call (LVAL, CALL, EXPR, __VA_ARGS__)\
-	if (!(EXPR))
+		ec___ (CALL, EXPR);\
+	}\
+	else
 
 struct kzSurfShape_t
 {
@@ -140,8 +122,8 @@ createXWindow (EGLNativeWindowType *xwin_trg, EGLNativeDisplayType *xdpy,
 	/* get X visual info */
 	memset (&visTemp, 0, sizeof (XVisualInfo));
 	visTemp.visualid = *vid;
-	ec_ifcall (visInfo, XGetVisualInfo, visInfo, *xdpy, VisualIDMask,
-			&visTemp, &cc)
+	visInfo = XGetVisualInfo (*xdpy, VisualIDMask, &visTemp, &cc);
+	ec_if (XGetVisualInfo, visInfo)
 	{
 		/* update attributes for window */
 		memset (&xattr, 0, sizeof (XSetWindowAttributes));
@@ -151,7 +133,7 @@ createXWindow (EGLNativeWindowType *xwin_trg, EGLNativeDisplayType *xdpy,
 				KeyPressMask | KeyReleaseMask |
 				ButtonPressMask | ButtonReleaseMask | PointerMotionMask;
 		/* create window */
-		ec_call ((*xwin_trg), XCreateWindow, !(*xwin_trg),
+		*xwin_trg = XCreateWindow (
 				*xdpy,
 				/* Display */
 				xroot,
@@ -173,6 +155,7 @@ createXWindow (EGLNativeWindowType *xwin_trg, EGLNativeDisplayType *xdpy,
 				&xattr
 				/* attributes */
 				);
+		ec_ec (XCreateWindow, *xwin_trg);
 		/* set title */
 		{
 			XSizeHints shints;
@@ -200,14 +183,19 @@ createXWindow (EGLNativeWindowType *xwin_trg, EGLNativeDisplayType *xdpy,
 static inline bool
 initEGL (EGLNativeDisplayType *xdpy, EGLDisplay *edpy)
 {
-	EGLBoolean blv;
 	/* open display */
-	ec_ifcall (*xdpy, XOpenDisplay, *xdpy, NULL)
+	*xdpy = XOpenDisplay (NULL);
+	ec_if (XOpenDisplay, *xdpy)
+	{
 		/* connect egl */
-		ec_ifcall (*edpy, eglGetDisplay, *edpy, *xdpy)
+		*edpy = eglGetDisplay (*xdpy);
+		ec_if (eglGetDisplay, *edpy)
+		{
 			/* initialize egl */
-			ec_ifcall (blv, eglInitialize, blv, *edpy, NULL, NULL)
+			ec_if (eglInitialize, eglInitialize (*edpy, NULL, NULL))
 				return true;
+		}
+	}
 	return false;
 }
 
@@ -218,7 +206,6 @@ initSurfy (EGLSurface *esurf, EGLDisplay *edpy, EGLConfig *ecfg,
 	EGLNativeWindowType *xwin, EGLNativeDisplayType *xdpy,
 	unsigned int wx, unsigned int wy)
 {
-	EGLBoolean blv;
 	EGLint cc;
 	/*
 	 * Биндим API рендера, биндится для каждой нити программы
@@ -230,19 +217,19 @@ initSurfy (EGLSurface *esurf, EGLDisplay *edpy, EGLConfig *ecfg,
 	 * 	eglGetCurrentSurface, eglWaitClient, eglWaitNative,
 	 * 	eglMakeCurrent (при ctx == EGL_NO_CONTEXT)
 	 */
-	ec_ifcall (blv, eglBindAPI, blv, EGL_OPENGL_ES_API)
+	ec_if (eglBindAPI, eglBindAPI (EGL_OPENGL_ES_API))
 	{
 		/* create context */
-		ec_ifcall (*ectx, eglCreateContext, *ectx != EGL_NO_CONTEXT, *edpy,
-				*ecfg, EGL_NO_CONTEXT, ectx_attr)
+		*ectx = eglCreateContext (*edpy, *ecfg, EGL_NO_CONTEXT, ectx_attr);
+		ec_if (eglCreateContext, *ectx != EGL_NO_CONTEXT)
 		{
 			/* create surface */
 			eglGetConfigAttrib (*edpy, *ecfg, EGL_NATIVE_VISUAL_ID, &cc);
-			ec_ifcallv (createXWindow, *xwin, xwin, xdpy, (VisualID*)&cc,
-					wx, wy)
+			createXWindow (xwin, xdpy, (VisualID*)&cc, wx, wy);
+			ec_if (createXWindow, *xwin)
 			{
-				ec_ifcall (*esurf, eglCreateWindowSurface,
-						*esurf != EGL_NO_SURFACE, *edpy, *ecfg, *xwin, NULL)
+				eglCreateWindowSurface (*edpy, *ecfg, *xwin, NULL);
+				ec_if (eglCreateWindowSurface, *esurf != EGL_NO_SURFACE)
 					return true;
 			}
 		}
@@ -253,13 +240,12 @@ initSurfy (EGLSurface *esurf, EGLDisplay *edpy, EGLConfig *ecfg,
 static inline void
 killSurfy (EGLNativeWindowType *xwin, EGLNativeDisplayType *xdpy)
 {
-	int cc;
-	if (xwin)
-		ec_call (cc, XDestroyWindow, cc != Success, *xdpy, *xwin);
-	if (xdpy)
+	if (xwin && *xwin)
+		ec_ec (XDestroyWindow, XDestroyWindow (*xdpy, *xwin) != Success);
+	if (xdpy && *xdpy)
 	{
-		ec_call (cc, XFlush, cc != Success, *xdpy);
-		ec_call (cc, XCloseDisplay, cc != Success, *xdpy);
+		ec_ec (XFlush, XFlush (*xdpy) != Success);
+		ec_ec (XFlush, XCloseDisplay (*xdpy) != Success);
 	}
 }
 
@@ -363,7 +349,6 @@ eventLoop (struct kzSurf_t *surf,
 		EGLNativeDisplayType *xdpy, EGLNativeWindowType *xwin,
 		EGLDisplay *edpy, EGLSurface *esurf)
 {
-	int cc;
 	struct kzSurfShape_t shape;
 	/* X11 events */
 	XEvent event;
@@ -435,8 +420,8 @@ eventLoop (struct kzSurf_t *surf,
 		{
 			/* feedback */
 			/* resize window */
-			ec_ifncall (cc, XResizeWindow, !cc,
-				*xdpy, *xwin, surf->shape.wx, surf->shape.wy)
+			ec_if (XResizeWindow,
+				XResizeWindow (*xdpy, *xwin, surf->shape.wx, surf->shape.wy))
 			{
 				/* restore value */
 				memcpy (&(surf->shape), &shape, sizeof (struct kzSurfShape_t));
@@ -498,7 +483,6 @@ main (int argc, char *argv[])
 	/* EGL */
 	EGLint cc;
 	EGLConfig ecfg;
-	EGLBoolean blv;
 	EGLDisplay edpy = EGL_NO_DISPLAY;
 	/* visual attribs */
 	EGLint const eattribs[] =
@@ -531,18 +515,18 @@ main (int argc, char *argv[])
 	surf.shape.wx = 800;
 	surf.shape.wy = 800;
 	/* X11: open display */
-	ec_ifcall (blv, initEGL, blv, &xdpy, &edpy)
+	ec_if (initEGL, initEGL (&xdpy, &edpy))
 	{
 		print_EGLInfo (&edpy);
 		/* match config */
-		ec_call (blv, eglChooseConfig, !blv || cc == 0, edpy, eattribs,
-				&ecfg, 1, &cc);
+		eglChooseConfig (edpy, eattribs, &ecfg, 1, &cc);
+		ec_ec (eglChooseConfig, cc == 0);
 		/* create surface and context */
-		ec_ifcall (blv, initSurfy, blv, &esurf, &edpy, &ecfg, &ectx, ectx_attr,
-				&xwin, &xdpy, surf.shape.wx, surf.shape.wy)
+		ec_if (initSurfy, initSurfy (&esurf, &edpy, &ecfg, &ectx, ectx_attr,
+				&xwin, &xdpy, surf.shape.wx, surf.shape.wy))
 		{
 			/* attach surfaces and context */
-			ec_call (blv, eglMakeCurrent, !blv, edpy, esurf, esurf, ectx);
+			ec_ec (eglMakeCurrent, !eglMakeCurrent (edpy, esurf, esurf, ectx));
 			/* GL code */
 			print_GLInfo ();
 			eventLoop (&surf, &xdpy, &xwin, &edpy, &esurf);
@@ -550,16 +534,16 @@ main (int argc, char *argv[])
 		/* GL code END */
 		fprintf (stderr, "$ 0x%X\n", eglGetError ());
 		/* egl exit */
-		ec_call (blv, eglMakeCurrent, !blv, edpy, EGL_NO_SURFACE,
-				EGL_NO_SURFACE, EGL_NO_CONTEXT);
+		ec_ec (eglMakeCurrent, !eglMakeCurrent (edpy, EGL_NO_SURFACE,
+				EGL_NO_SURFACE, EGL_NO_CONTEXT));
 		if (esurf != EGL_NO_SURFACE)
-			ec_call (blv, eglDestroySurface, !blv, edpy, esurf);
+			ec_ec (eglDestroySurface, !eglDestroySurface (edpy, esurf));
 		if (ectx != EGL_NO_CONTEXT)
-			ec_call (blv, eglDestroyContext, !blv, edpy, ectx);
+			ec_ec (eglDestroyContext, !eglDestroyContext (edpy, ectx));
 	}
 	/* exit */
 	if (edpy != EGL_NO_DISPLAY)
-		ec_call (blv, eglTerminate, !blv, edpy);
+		ec_ec (eglTerminate, !eglTerminate (edpy));
 	/* x11 exit */
 	killSurfy (&xwin, &xdpy);
 	return 0;
