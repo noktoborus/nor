@@ -19,7 +19,7 @@
 
 #define ec_ec(CALL, EXPR) \
 	{\
-		if (EXPR)\
+		if (!(EXPR))\
 		{\
 			ec___ (CALL, EXPR);\
 		}\
@@ -106,6 +106,26 @@ struct kzSurf_t
 #define kzPASS_SWAP	1
 #define kzPASS_STOP	(1 << 1)
 /* return ptr to new window in *xwin_trg */
+static int
+_XerrorHandler (Display *xdpy, XErrorEvent *erev)
+{
+	char buf[1024];
+	XGetErrorText (xdpy, erev->error_code, buf, 1024);
+	fprintf (stderr, "FAIL x11: %d 0x%x %d %d %d, ",
+			erev->type, (unsigned int)erev->resourceid, erev->error_code,
+			erev->request_code, erev->minor_code);
+	fputs (buf, stderr);
+	fputc ('\n', stderr);
+	return 1;
+}
+
+static int
+_XerrorIOHandler (Display *xdpy)
+{
+	perror ("FAIL X11-IO");
+	return 1;
+}
+
 static inline void
 createXWindow (EGLNativeWindowType *xwin_trg, EGLNativeDisplayType *xdpy,
 		VisualID *vid, unsigned int wx, unsigned int wy)
@@ -117,6 +137,10 @@ createXWindow (EGLNativeWindowType *xwin_trg, EGLNativeDisplayType *xdpy,
 	Window xroot;
 	if (!xwin_trg)
 		return;
+	/* set handlers */
+	XSetIOErrorHandler (_XerrorIOHandler);
+	XSetErrorHandler (_XerrorHandler);
+	XSynchronize (*xdpy, True);
 	/* get root window */
 	xroot = XRootWindow (*xdpy, DefaultScreen (*xdpy));
 	/* get X visual info */
@@ -228,7 +252,7 @@ initSurfy (EGLSurface *esurf, EGLDisplay *edpy, EGLConfig *ecfg,
 			createXWindow (xwin, xdpy, (VisualID*)&cc, wx, wy);
 			ec_if (createXWindow, *xwin)
 			{
-				eglCreateWindowSurface (*edpy, *ecfg, *xwin, NULL);
+				esurf = eglCreateWindowSurface (*edpy, *ecfg, *xwin, NULL);
 				ec_if (eglCreateWindowSurface, *esurf != EGL_NO_SURFACE)
 					return true;
 			}
@@ -241,11 +265,11 @@ static inline void
 killSurfy (EGLNativeWindowType *xwin, EGLNativeDisplayType *xdpy)
 {
 	if (xwin && *xwin)
-		ec_ec (XDestroyWindow, XDestroyWindow (*xdpy, *xwin) != Success);
+		ec_ec (XDestroyWindow, XDestroyWindow (*xdpy, *xwin) == Success);
 	if (xdpy && *xdpy)
 	{
-		ec_ec (XFlush, XFlush (*xdpy) != Success);
-		ec_ec (XFlush, XCloseDisplay (*xdpy) != Success);
+		ec_ec (XFlush, XFlush (*xdpy) == Success);
+		ec_ec (XFlush, XCloseDisplay (*xdpy) == Success);
 	}
 }
 
@@ -520,13 +544,13 @@ main (int argc, char *argv[])
 		print_EGLInfo (&edpy);
 		/* match config */
 		eglChooseConfig (edpy, eattribs, &ecfg, 1, &cc);
-		ec_ec (eglChooseConfig, !cc);
+		ec_ec (eglChooseConfig, cc);
 		/* create surface and context */
 		ec_if (initSurfy, initSurfy (&esurf, &edpy, &ecfg, &ectx, ectx_attr,
 				&xwin, &xdpy, surf.shape.wx, surf.shape.wy))
 		{
 			/* attach surfaces and context */
-			ec_ec (eglMakeCurrent, !eglMakeCurrent (edpy, esurf, esurf, ectx));
+			ec_ec (eglMakeCurrent, eglMakeCurrent (edpy, esurf, esurf, ectx));
 			/* GL code */
 			print_GLInfo ();
 			eventLoop (&surf, &xdpy, &xwin, &edpy, &esurf);
@@ -534,16 +558,16 @@ main (int argc, char *argv[])
 		/* GL code END */
 		fprintf (stderr, "$ 0x%X\n", eglGetError ());
 		/* egl exit */
-		ec_ec (eglMakeCurrent, !eglMakeCurrent (edpy, EGL_NO_SURFACE,
+		ec_ec (eglMakeCurrent, eglMakeCurrent (edpy, EGL_NO_SURFACE,
 				EGL_NO_SURFACE, EGL_NO_CONTEXT));
 		if (esurf != EGL_NO_SURFACE)
-			ec_ec (eglDestroySurface, !eglDestroySurface (edpy, esurf));
+			ec_ec (eglDestroySurface, eglDestroySurface (edpy, esurf));
 		if (ectx != EGL_NO_CONTEXT)
-			ec_ec (eglDestroyContext, !eglDestroyContext (edpy, ectx));
+			ec_ec (eglDestroyContext, eglDestroyContext (edpy, ectx));
 	}
 	/* exit */
 	if (edpy != EGL_NO_DISPLAY)
-		ec_ec (eglTerminate, !eglTerminate (edpy));
+		ec_ec (eglTerminate, eglTerminate (edpy));
 	/* x11 exit */
 	killSurfy (&xwin, &xdpy);
 	return 0;
